@@ -1,0 +1,127 @@
+\documentclass{article}
+
+\usepackage{listings}
+    \lstset{language=TeX, captionpos=b, basicstyle=\ttfamily, commentstyle=\itshape\color{gray}, numbers=left, backgroundcolor=\color{yellow!20}}
+\usepackage{xcolor}
+\usepackage{parskip}
+\usepackage{hyperref}
+
+\title{Notes on PGFPlots}
+\author{gvlassis}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Macros}
+\subsection{\textbackslash def}
+\begin{lstlisting}
+\def \name (#1,...){
+    body
+}
+\end{lstlisting}
+Macros inside body are expanded at \textbf{execution} time.
+
+\subsection{\textbackslash edef}
+\begin{lstlisting}
+\edef \name (#1,...){
+    body
+}
+\end{lstlisting}
+Macros inside body are expanded at \textbf{definition} time.
+
+\lstinline!\noexpand! cancels the expansion of the succeeding token.
+
+\subsection{\textbackslash let}
+\begin{lstlisting}
+\let \new=\old
+\end{lstlisting}
+Makes the macro \lstinline!\new! exactly equivalent to the macro \lstinline!\old! at \textbf{definition} time.
+
+{\large\textbf{Notes:}}
+\begin{itemize}
+    \item \lstinline!\def!, \lstinline!\edef! and \lstinline!\let! are \TeX\ commands. \LaTeX\ provides \lstinline!\newcommand! (\propto \lstinline!\def!) et al. \textbf{macros} (higher level) which are supposed to be more convenient (check if already defined, optional argument, default value). 
+    \item \textbf{\TeX\ has scopes!} They are called \textcolor{green}{groups} and are defined with \{\}. \textcolor{blue}{Most}, but not all (e.g. document), \textcolor{blue}{environments create a new group}. Like most programming languages, \TeX\ destroys local variables/macros at the end of scope. You can make a global variable/macro inside a group with \lstinline!\global! (\lstinline!\gdef!=\lstinline!\global\def!, \lstinline!\xdef!=\lstinline!\global\edef!)
+    \item \lstinline!\expandafter! expands second token before first.
+\end{itemize}
+
+\section{For loops}
+\subsection{\textbackslash foreach (TikZ)}
+Each iteration in separate group.
+
+Does not invoke math parser.
+
+\subsection{\textbackslash pgfplotsforeachungrouped (PGFPlots)}
+All iterations together outside any group.
+
+\{start,start+step,...,end\} invokes math parser.
+
+\section{axis environment}
+An axis is not drawn piece by piece (e.g. title, xlabel, first plot, second plot etc.), but collectively when \lstinline!\end{axis}! is encountered. This makes sense because to render part of the axis information about the whole (e.g ymin) is needed. Hence, when PGFPlots encounters information about the axis, it stores this information internally. In some cases (e.g. \lstinline!\addplot!), before this information is stored macros are expanded. In others (e.g. \lstinline!\begin{axis}[title=...]!, \lstinline!\addlegendentry!), no expansion takes place (expansion can be controlled with \lstinline!\edef!).
+
+\textbf{Note:} \lstinline!\pgfmathtruncatemacro! (obviously) expands macros.
+
+\section{groupplot environment}
+\textcolor{blue}{You can think of groupplot as a convenience to handle multiple axis environments.}
+
+Consecutive calls to \lstinline!\nextgroupplot! delimit axis environments.
+
+\section{Examples}
+\begin{lstlisting}[caption={Output is (0,0), (0,1), (2,0), (2,1), (4,0), (4,1), (6,0), (6,1) separated by newlines. After the double loop, \textbackslash i and \textbackslash j have the values they had before the loop. If we instead use \textbackslash pgfplotsforeachungrouped, \textbackslash i and \textbackslash j would be 6 and 1 respectively.}]
+\foreach \i in {0,2,...,6}{
+    \foreach \j in {0,1}{
+        (\i,\j)
+
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Works as expected. If we would not forcibly expand \textbackslash i in \textbackslash addlegendentry, all the \textbackslash is would be expanded at \textbackslash end\{axis\}, where they would have the value of \textbackslash i before the loop. If in that case we would instead use \textbackslash pgfplotsforeachungrouped, all the \textbackslash is would be 3.}]
+\begin{axis}
+\foreach \i in {0,...,3}{
+    \addplot {\i*x};
+    % \addlegendentry{\i}
+    \edef\tmp{\noexpand\addlegendentry{\i}}\tmp
+}
+\end{axis}
+\end{lstlisting}
+
+\begin{lstlisting}[caption={\textcolor{orange}{?}. \textcolor{red}{Avoid separate \textbackslash edefs}. Using \textbackslash foreach would not play nicely with the groups created by \textbackslash nextgroupplot.}]
+\begin{groupplot}[group style={rows=3, columns=1}]
+\pgfplotsforeachungrouped \i in {0,...,2}{
+    % \nextgroupplot[title=\i]
+    % \noexpand\addplot {\i*x};
+    % \edef\tmpa{\noexpand\nextgroupplot[title=\i]}\tmpa
+    % \edef\tmpb{\noexpand\addplot {\i*x}}\tmpb
+    \edef\tmp{
+        \noexpand\nextgroupplot[title=\i]
+        \noexpand\addplot {\i*x};
+    }\tmp
+}
+\end{groupplot}
+\end{lstlisting}
+
+\begin{lstlisting}[caption={We could follow multiple approaches: \textcolor{yellow}{i) automatic unrolling}, ii) manual unrolling (I usually have simple cases), iii) nesting \textbackslash edefs (I somehow managed to get it working, but it is very ugly), iv) \href{https://tex.stackexchange.com/questions/130909/changing-parameters-in-a-groupplot}{eappto} (inflexible, extra package, unconventional). \textcolor{orange}{?}. Using \textbackslash foreach would not play nicely with the groups created by \textbackslash nextgroupplot. Moreover, we need \textbackslash pgfplotsforeachungrouped to invoke math parser.}]
+\pgfmathtruncatemacro{\is}{2}
+\pgfmathtruncatemacro{\js}{3}
+\pgfmathtruncatemacro{\ks}{4}
+\begin{groupplot}[group style={rows=\is, columns=\js}]
+\pgfplotsforeachungrouped \g in {0,...,\is*\js*\ks-1}{
+    \pgfmathtruncatemacro{\i}{mod(div(\g,\js*\ks),\is)}
+    \pgfmathtruncatemacro{\j}{mod(div(\g,\ks),\js)}
+    \pgfmathtruncatemacro{\k}{mod(div(\g,1),\ks)}
+
+    \edef\tmp{
+        \noexpand\ifnum \k = 0
+            \noexpand\nextgroupplot[title=\i-\j]
+        \noexpand\fi
+
+        \noexpand\addplot{\i*x^2+\j*x+\k};
+        \noexpand\addlegendentry{(\i,\j,\k)}
+    }\tmp
+}
+\end{groupplot}
+\end{lstlisting}
+
+\end{document}
