@@ -1,0 +1,74 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{underscore}
+\usepackage{parskip}
+\usepackage{cleveref}
+
+\newcommand{\dm}[3]{
+    \overset{\textcolor{magenta}{#2 \times #3}}{#1}
+}
+\newcommand{\note}[1]{
+    \textbf{Note:}\ #1
+}
+
+\title{Attention implementations}
+\author{gvlassis}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+Attention consists of:
+\begin{gather}
+    \dm{Q}{n}{d} = \dm{X}{n}{d} \cdot \dm{W^{T}_{Q}}{d}{d} \label{eq:q}\\
+    \dm{K}{n}{d} = \dm{X}{n}{d} \cdot \dm{W^{T}_{K}}{d}{d} \label{eq:k}\\
+    \dm{V}{n}{d} = \dm{X}{n}{d} \cdot \dm{W^{T}_{V}}{d}{d} \label{eq:v}\\
+    \dm{W^\prime}{n}{n} = \dm{Q}{n}{d} \cdot \dm{K^T}{d}{n} \text{($W_{i,j}$: Contribution of $x_j$ to $y_i$)}\label{eq:wp}\\
+    \dm{W}{n}{n} = \sigma_{\text{dim=1}} (\frac{\dm{W^\prime}{n}{n}}{\text{scale}}) \text{($\forall$ index tuples, elements in dim=1 are normalized)} \label{eq:w}\\
+    \dm{Y}{n}{d} = \dm{W}{n}{n} \cdot \dm{V}{n}{d} \label{eq:y}
+\end{gather}
+
+Attention is \textbf{equivariant} (changing two rows in the input changes two rows in the output). In order to break this/insert a better implicit bias, we add \textbf{positional bias}. The two most common ways to do so are:
+\begin{align*}
+    \text{\eqref{eq:q}} \rightarrow Q = f(X) \cdot W^{T}_{Q}\\
+    \text{\eqref{eq:k}} \rightarrow K = f(X) \cdot W^{T}_{K}\\
+    \text{\eqref{eq:v}} \rightarrow V = f(X) \cdot W^{T}_{V}
+\end{align*}
+, and:
+\begin{align*}
+    \text{\eqref{eq:wp}} \rightarrow W^\prime = f(Q,K^T)
+\end{align*}
+
+{\large \textbf{Notes}:}
+\begin{enumerate}
+    \item $f$ is usually additive (e.g. sinusoidal, learned, T5) or multiplicative (e.g. RoPE)
+    \item The first way can be written in the form of the second (i.e. the second way is more general)
+\end{enumerate}
+
+There are countless implementations of \cref{eq:q,eq:k,eq:v,eq:wp,eq:w,eq:y}, with varying support for positional biases.
+
+\section{Flash Attention/FA (FA1: 2022, FA2: 2023, FA3: 2024)}
+Does not take mask, supports RoPE/ALiBi.
+
+Runs \cref{eq:wp,eq:w,eq:y}, gives $W$ (buggy) and $Y$.
+
+Fastest.
+
+\section{torch.nn.functional.scaled_dot_product_attention/sdpa (PyTorch 2.0)}
+Takes mask.
+
+Runs \cref{eq:wp,eq:w,eq:y}, gives $Y$.
+
+Calls FA without a mask. Otherwise very slow.
+
+\section{Flex Attention (PyTorch 2.5)}
+Takes mask.
+
+Runs \cref{eq:wp,eq:w,eq:y}, gives $Y$.
+
+90\% of FA.
+
+\end{document}
