@@ -1,0 +1,63 @@
+\documentclass{article}
+
+\usepackage{xcolor}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{ragged2e}
+\usepackage{listings}
+    \lstset{language=Python, captionpos=b, basicstyle=\ttfamily, commentstyle=\itshape\color{gray}, numbers=left, breaklines=true, backgroundcolor=\color{yellow!20}}
+
+\title{Learning rate Schedule}
+\author{gvlassis}
+\date{}
+
+\newcommand{\define}[1]{
+    \textcolor{green}{\textbf{#1}}
+}
+
+\begin{document}
+
+\maketitle
+
+\define{LR Schedule}:\ In case the LR is not kept constant (simplest scenario), it is the schedule according to which it changes. It normally consists of 3 seasons:
+
+\begin{enumerate}
+    \item
+        \define{Warmup}:\ The LR is gradually increased from a small to a big value. There are various explanations about why this might help empirically:
+        \begin{itemize}
+            \item It allows the network to tolerate larger LR by forcing the network to more well-conditioned areas of the loss landscape.
+            \item If you use a momentum and your initial LR is too high, you are at risk of keeping in memory a bad descent direction for too long. Warmup is a trick to set a correct initialization of the momentum buffers.
+            \item If your dataset is highly differentiated, you can suffer from a sort of \define{"early overfitting"}. If your shuffled data happens to include a cluster of related, strongly-featured observations, your model's initial training can skew badly toward those features, or worse, toward incidental features that aren't truly related to the topic at all. Warmup is a way to reduce the \define{primacy effect} of the early training examples. Without it, you may need to run a few extra epochs to get the convergence desired, as the model untrains those early superstitions, or worse, the model might collapse at the beginning and just never recover.
+        \end{itemize}
+        It is usually \textbf{linear}:
+        \begin{gather*}
+            \alpha_i = \alpha_0 + (\frac{\alpha-\alpha_0}{n}) \cdot i \implies \alpha_i = \alpha_k + \frac{\alpha-\alpha_0}{\textcolor{magenta}{(n-k)}} \cdot \textcolor{magenta}{(i-k)}
+        \end{gather*}
+    \item \define{Constant/Hold}:\ The LR stays constant.
+    \item 
+        \define{Decay}:\ The LR is gradually decayed from a big to a small value. It is usually \textbf{cosine} (proposed in the "SGDR: Stochastic Gradient Descent with Warm Restarts"-2016 paper):
+        \begin{gather*}
+            \alpha_i = (\alpha_0-\alpha) \cdot \frac{\cos(\pi*(\frac{i}{n}))+1}{2} + \alpha \implies \alpha_i = (\alpha_k-\alpha) \cdot \frac{\cos(\pi*\frac{\textcolor{magenta}{i-k}}{\textcolor{magenta}{n-k}})+1}{2} + \alpha
+        \end{gather*}
+\end{enumerate}
+
+\define{Annealing}:\ Increasing (heating) and subsequently decreasing (cooling) the LR.
+
+\begin{figure}
+\Centering
+\includegraphics[width=0.8\textwidth]{figure.png}
+\end{figure}
+
+\begin{lstlisting}[caption={PyTorch code}]
+optimizer = torch.optim.SGD(model.parameters(), lr=10)
+# Factors∈[0,1], milestones are inclusive
+scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer,[torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1/10, end_factor=1, total_iters=5), torch.optim.lr_scheduler.ConstantLR(optimizer, factor=1, total_iters=5), torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=5), torch.optim.lr_scheduler.ConstantLR(optimizer, factor=1/2, total_iters=5)], milestones=[5,10,30])
+
+for iteration in range(iterations):
+    # scheduler.get_last_lr()
+    # optimizer.step()
+    scheduler.step()
+\end{lstlisting}
+
+\end{document}
